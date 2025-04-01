@@ -1072,6 +1072,22 @@ sub checkMessageAddHeader
 
       $newheaders .= mandatory_headers("Scanned");
 
+      # Next, add the X-Junk-Score header if we need to (and can).
+
+      if ($root_conf->{x_junk_score_header})
+      {
+        my $header_text = x_junk_score_header($status, $root_conf, "\e");
+
+        # if we can add the header, let's do it
+
+        if ((cgp_string_length($newheaders) +
+              cgp_string_length($header_text)) <
+            $root_conf->{cgp_max_response_length})
+        {
+          $newheaders .= $header_text;
+        }
+      }
+
       # CommuniGate Pro can only take a limited-size response from the
       # plug-in (4K, in the versions of CommuniGate Pro released to date);
       # let's see if our headers fit within that (taking into account the
@@ -1150,22 +1166,6 @@ sub checkMessageAddHeader
                       Mail::SpamAssassin::Version().
                       " ($Mail::SpamAssassin::SUB_VERSION)\e";
         $newheaders .= mandatory_headers("Scanned, Headers Truncated");
-
-        # Next, add the X-Junk-Score header if we need to (and can).
-
-        if ($root_conf->{x_junk_score_header})
-        {
-          my $header_text = x_junk_score_header($status, $root_conf, "\e");
-
-          # if we can add the header, let's do it
-
-          if ((cgp_string_length($newheaders) +
-                cgp_string_length($header_text)) <
-              $root_conf->{max_response_length})
-          {
-            $newheaders .= $header_text;
-          }
-        }
 
         # Next, add headers one at a time until we can't anymore
 
@@ -2519,7 +2519,6 @@ sub loadRootConfig
   $root_conf->{absolute_queue_filenames} = 0;
   $root_conf->{prevent_backscatter} = 1;
   $root_conf->{x_junk_score_header} = 0;
-  $root_conf->{x_junk_score_thresholds} = 1;
   @x_junk_score_thresholds = split /\s+/, "0.001 4.0 8.0 9.0 9.5 10.0";
 
   # root_conf->{route_mail_extension} set at runtime initialization
@@ -2975,6 +2974,10 @@ sub readConfigFile
     }
     elsif ($line =~ /^x[-_]junk[-_]score[-_]header[\s\=]+(\S+)$/)
     {
+      $conf->{x_junk_score_header} = evaluateBoolean($1);
+    }
+    elsif ($line =~ /^x[-_]junk[-_]score[-_]thresholds[\s\=]+(.+)$/)
+    {
       # got to parse a space-separated list of floating point numbers;
       # if there are not 6 of them, or they are not increasing, we
       # keep the previous settings (which might be defaults)
@@ -2991,7 +2994,6 @@ sub readConfigFile
       if ($legit_thresholds)
       {
         @x_junk_score_thresholds = @new_x_junk_score_thresholds;
-        $conf->{x_junk_score_thresholds} = 1;
       }
     }
   }
